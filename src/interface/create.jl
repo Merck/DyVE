@@ -1,6 +1,6 @@
 # reaction network DSL: CREATE part; reaction line and event parsing 
 
-export @ReactionNetwork
+export @ReactionNetworkSchema
 
 using MacroTools: prewalk, postwalk, striplines, isexpr
 using Symbolics: build_function, get_variables
@@ -45,7 +45,7 @@ Custom functions and sampleable objects can be used as numeric parameters. Note 
 # Examples
 
 ```julia
-acs = @ReactionNetwork begin
+acs = @ReactionNetworkSchema begin
     1.0, X ⟶ Y
     1.0, X ⟶ Y, priority => 6.0, prob => 0.7, capacity => 3.0
     1.0, ∅ --> (Poisson(0.3γ)X, Poisson(0.5)Y)
@@ -57,17 +57,17 @@ end
 @solve_and_plot acs
 ```
 """
-macro ReactionNetwork end
+macro ReactionNetworkSchema end
 
-macro ReactionNetwork()
+macro ReactionNetworkSchema()
     return make_ReactionNetwork(:())
 end
 
-macro ReactionNetwork(ex)
+macro ReactionNetworkSchema(ex)
     return make_ReactionNetwork(ex; eval_module = __module__)
 end
 
-macro ReactionNetwork(ex, args...)
+macro ReactionNetworkSchema(ex, args...)
     return make_ReactionNetwork(
         generate(Expr(:braces, ex, args...); eval_module = __module__);
         eval_module = __module__,
@@ -78,7 +78,7 @@ function make_ReactionNetwork(ex::Expr; eval_module = @__MODULE__)
     blockex = generate(ex; eval_module)
     blockex = unblock_shallow!(blockex)
 
-    return :(ReactionNetwork(get_data($(QuoteNode(blockex)))...))
+    return :(ReactionNetworkSchema(get_data($(QuoteNode(blockex)))...))
 end
 
 ### Functions that process the input and rephrase it as a reaction system ###
@@ -146,8 +146,8 @@ function recursively_expand_actions!(evs, condex, event)
 end
 
 function expand_rate(rate)
-    rate = if !(isexpr(rate, :macrocall) && (macroname(rate) == :per_step))
-        :(rand(Poisson(max($rate, 0))))
+    rate = if !(isexpr(rate, :macrocall) && (macroname(rate) == :deterministic))
+        :(rand(Poisson(max(state.dt * $rate, 0))))
     else
         rate.args[3]
     end
@@ -271,7 +271,7 @@ function prune_reaction_line!(pcs, reactants, line)
     return line
 end
 
-function recursively_find_reactants!(reactants, pcs, ex::SampleableValues)
+function recursively_find_reactants!(reactants, pcs, ex)
     if typeof(ex) != Expr || isexpr(ex, :.) || (ex.head == :escape)
         if (ex == 0 || in(ex, empty_set))
             return :∅
@@ -293,8 +293,13 @@ function recursively_find_reactants!(reactants, pcs, ex::SampleableValues)
                 isexpr(ex.args[i], :tuple) ? ex.args[i].args[2] : ex.args[i],
             )
         end
+    elseif isexpr(ex, :macrocall) && macroname(ex) ∈ [:structured, :move]
+        return ex
     elseif isexpr(ex, :macrocall)
-        recursively_find_reactants!(reactants, pcs, ex.args[3])
+        pass_value = ex.args[3] isa QuoteNode ? ex.args[3].value : ex.args[3]
+        recursively_find_reactants!(reactants, pcs, pass_value)
+    elseif isexpr(ex, :call)
+        push!(reactants, ex.args[1])
     else
         push!(reactants, underscorize(ex))
     end

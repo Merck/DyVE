@@ -1,7 +1,7 @@
 using ReactiveDynamics
 
 # model dynamics
-toy_pharma_model = @ReactionNetwork begin
+toy_pharma_model = @ReactionNetworkSchema begin
     α(candidate_compound, marketed_drug, κ),
     3 * @conserved(scientist) + @rate(budget) --> candidate_compound,
     name => discovery,
@@ -35,33 +35,29 @@ end
 ## other arguments passed to the solver
 @prob_meta toy_pharma_model tspan = 250 dt = 0.1
 
-prob = @problematize toy_pharma_model
+prob = ReactionNetworkProblem(toy_pharma_model)
 
-sol = @solve prob trajectories = 20
+sol = simulate(prob)
 
-using Plots
-
-@plot sol plot_type = summary
-
-@plot sol plot_type = summary show = :marketed_drug
+draw(sol)
 
 ## for deterministic rates 
 
 # model dynamics
-toy_pharma_model = @ReactionNetwork begin
-    @per_step(α(candidate_compound, marketed_drug, κ)),
+toy_pharma_model = @ReactionNetworkSchema begin
+    @deterministic(α(candidate_compound, marketed_drug, κ)),
     3 * @conserved(scientist) + @rate(budget) --> candidate_compound,
     name => discovery,
     probability => 0.3,
     cycletime => 10.0,
     priority => 0.5
-    @per_step(β(candidate_compound, marketed_drug)),
+    @deterministic(β(candidate_compound, marketed_drug)),
     candidate_compound + 5 * @conserved(scientist) + 2 * @rate(budget) -->
     marketed_drug + 5 * budget,
     name => dx2market,
     probability => 0.5 + 0.001 * @t(),
     cycletime => 4
-    @per_step(γ * marketed_drug), marketed_drug --> ∅, name => drug_killed
+    @deterministic(γ * marketed_drug), marketed_drug --> ∅, name => drug_killed
 end
 
 @periodic toy_pharma_model 0.0 budget += 11 * marketed_drug
@@ -82,12 +78,8 @@ end
 ## other arguments passed to the solver
 @prob_meta toy_pharma_model tspan = 250
 
-prob = @problematize toy_pharma_model
+prob = ReactionNetworkProblem(toy_pharma_model)
 
-sol = @solve prob trajectories = 20
+sol = simulate(prob)
 
-using Plots
-
-@plot sol plot_type = summary
-
-@plot sol plot_type = summary show = :marketed_drug
+draw(sol)
