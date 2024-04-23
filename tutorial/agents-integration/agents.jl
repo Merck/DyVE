@@ -24,7 +24,7 @@ network = @ReactionNetworkSchema
     ρ2, ∅ --> R2
 
     # Generate "Molecule 1" (where the integer corresponds to a "state" of, e.g., experimental triage).
-    ρ3, ∅ --> M1(@t(), rand(4))
+    ρ3, ∅ --> @structured(M1(@t(), rand(4)))
 
     # Based on properties of particular "structured agent" assigned to the transition,
     # we can update the attributes of the instance of a transition (such as probability of success).
@@ -33,28 +33,26 @@ network = @ReactionNetworkSchema
     # Update transition probability based on properties of "M1," 
     # which was assigned as a "resource" to the transition.
     ρ4,
-    R1 + M1 --> M2(@t(), rand(4)),
+    R1 + SM1 --> @structured(M2(@t(), rand(4))),
     preAction => update_prob_transition(state, transition)
 
-    # R2 + M1 --> M2(@t(), rand(4))
-    5.0, R2 + M1 --> @structured(M2(@t(), rand(4)), :A)
+    5.0, R2 + SM1 --> @structured(M2(@t(), rand(4)), :A)
     1.0, R2 + A --> @structured(M2(@t(), rand(4)), f_species(@transition))
 
-    1.0, R2 + M1 --> @move(M1, :M2)
-    1.0, R2 + M1 --> @move(M1, :C)
+    2.0, R2 + SM1 --> @move(:SM1, :C)
 end
 
 @prob_init network R1 = 10 R2 = 15
 
 # As for structured agents, we will need to instantiate the instances
 # and add them to the instance of a network. But first, we still need to define these types.
-@prob_init network M1 = 2 M2 = 0
+@prob_init network SM1 = 2 SM2 = 0
 
 @prob_params network ρ1 = 2 ρ2 = 1 ρ3 = 3 ρ4 = 4
 
 @prob_meta network tspan = 100 dt = 1.0
 
-# We use `@structured` macro, which is a convenience wrapper around `@aagent`),
+# We use `@structured` macro, which is a convenience wrapper around `@aagent`,
 # defined in ReactiveDynamics.jl
 @structured_token network struct M1
     descriptor::Any
@@ -68,7 +66,7 @@ using Random
 using ReactiveDynamics: M1
 
 function ReactiveDynamics.M1(time, descriptor)
-    return M1("M1" * randstring(4), :M1, nothing, [], descriptor, time)
+    return M1("M1" * randstring(4), :SM1, nothing, [], descriptor, time)
 end
 
 # We define the function which updates the transition probability.
@@ -94,12 +92,12 @@ end
         time_created::Any
     end
 
-    using Random
-    M2(time, descriptor) = M2("M2" * randstring(4), :M2, nothing, [], descriptor, time)
+    using Random: randstring
+    M2(time, descriptor) = M2("M2" * randstring(4), :SM2, nothing, [], descriptor, time)
 end
 
 # Let the network know that the species is structured.
-for species in [:M1, :M2, :A, :B, :C]
+for species in [:SM1, :SM2, :A, :B, :C]
     ReactiveDynamics.register_structured_species!(network, species)
 end
 

@@ -146,7 +146,7 @@ function recursively_expand_actions!(evs, condex, event)
 end
 
 function expand_rate(rate)
-    rate = if !(isexpr(rate, :macrocall) && (macroname(rate) == :per_step))
+    rate = if !(isexpr(rate, :macrocall) && (macroname(rate) == :deterministic))
         :(rand(Poisson(max(state.dt * $rate, 0))))
     else
         rate.args[3]
@@ -271,7 +271,7 @@ function prune_reaction_line!(pcs, reactants, line)
     return line
 end
 
-function recursively_find_reactants!(reactants, pcs, ex::SampleableValues)
+function recursively_find_reactants!(reactants, pcs, ex)
     if typeof(ex) != Expr || isexpr(ex, :.) || (ex.head == :escape)
         if (ex == 0 || in(ex, empty_set))
             return :∅
@@ -293,8 +293,11 @@ function recursively_find_reactants!(reactants, pcs, ex::SampleableValues)
                 isexpr(ex.args[i], :tuple) ? ex.args[i].args[2] : ex.args[i],
             )
         end
+    elseif isexpr(ex, :macrocall) && macroname(ex) ∈ [:structured, :move]
+        return ex
     elseif isexpr(ex, :macrocall)
-        recursively_find_reactants!(reactants, pcs, ex.args[3])
+        pass_value = ex.args[3] isa QuoteNode ? ex.args[3].value : ex.args[3]
+        recursively_find_reactants!(reactants, pcs, pass_value)
     elseif isexpr(ex, :call)
         push!(reactants, ex.args[1])
     else

@@ -45,19 +45,19 @@ draw(sol)
 
 # model dynamics
 toy_pharma_model = @ReactionNetworkSchema begin
-    @per_step(α(candidate_compound, marketed_drug, κ)),
+    @deterministic(α(candidate_compound, marketed_drug, κ)),
     3 * @conserved(scientist) + @rate(budget) --> candidate_compound,
     name => discovery,
     probability => 0.3,
     cycletime => 10.0,
     priority => 0.5
-    @per_step(β(candidate_compound, marketed_drug)),
+    @deterministic(β(candidate_compound, marketed_drug)),
     candidate_compound + 5 * @conserved(scientist) + 2 * @rate(budget) -->
     marketed_drug + 5 * budget,
     name => dx2market,
     probability => 0.5 + 0.001 * @t(),
     cycletime => 4
-    @per_step(γ * marketed_drug), marketed_drug --> ∅, name => drug_killed
+    @deterministic(γ * marketed_drug), marketed_drug --> ∅, name => drug_killed
 end
 
 @periodic toy_pharma_model 0.0 budget += 11 * marketed_drug

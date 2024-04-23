@@ -332,19 +332,31 @@ end
 
 function structured_rhs(expr::Expr, state, transition)
     if isexpr(expr, :macrocall) && macroname(expr) == :structured
-        expr = quote
-            token = $(expr.args[end-1])
-            species = $(expr.args[end])
+        if length(expr.args) == 3
+            expr = quote
+                return $(expr.args[end])
+            end
+            # write docs
+            token = context_eval(state, transition, state.wrap_fun(expr))
 
-            return token, species
+            entangle!(getagent(state, "structured"), token)
+
+            return token, get_species(token)
+        else
+            expr = quote
+                token = $(expr.args[end-1])
+                species = $(expr.args[end])
+
+                return token, species
+            end
+            # write docs
+            token, species = context_eval(state, transition, state.wrap_fun(expr))
+            set_species!(token, Symbol(species))
+
+            entangle!(getagent(state, "structured"), token)
+
+            return token, get_species(token)
         end
-
-        token, species = context_eval(state, transition, state.wrap_fun(expr))
-        set_species!(token, Symbol(species))
-
-        entangle!(getagent(state, "structured"), token)
-
-        return token, get_species(token)
     elseif isexpr(expr, :macrocall) && macroname(expr) == :move
         expr = quote
             species_from = $(expr.args[end-1])
@@ -528,6 +540,8 @@ function ReactionNetworkProblem(
     structured_token_names =
         acs[filter(i -> acs[i, :specStructured], 1:nparts(acs, :S)), :specName]
 
+    println(acs[:, :specName])
+    println(structured_token_names)
     attrs, transitions, wrap_fun = compile_attrs(acs, structured_token_names)
     transition_recipes = transitions
     u0_init = zeros(nparts(acs, :S))
@@ -583,7 +597,7 @@ function ReactionNetworkProblem(
 
     entangle!(network, FreeAgent("structured"))
 
-    save!(network)
+    # save!(network)
 
     return network
 end
@@ -612,6 +626,11 @@ function update_u_structured!(state)
 end
 
 function AlgebraicAgents._step!(state::ReactionNetworkProblem)
+    update_u_structured!(state)
+    if isempty(state.sol)
+        save!(state)
+    end
+
     free_blocked_species!(state)
     update_u_structured!(state)
     update_observables(state)
@@ -632,8 +651,11 @@ function AlgebraicAgents._step!(state::ReactionNetworkProblem)
         ),
     )
 
+    state.t += state.dt
+
     save!(state)
-    return state.t += state.dt
+
+    return state.t
 end
 
 function AlgebraicAgents._projected_to(state::ReactionNetworkProblem)
